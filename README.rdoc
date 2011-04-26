@@ -31,4 +31,7 @@ See sample_config.yaml[link:files/CONFIG_rdoc.html] for the vmth config file for
 
 == Support
 
-For now, mail greg@rage.net and I'll do my best to help.
+For support or to report bugs open an issue at the gitub issue tracker:
+
+https://github.com/gregretkowski/vmth/issues
+
