@@ -1,0 +1,41 @@
+#!/usr/bin/ruby
+
+
+=begin rdoc
+
+This tool helps you to debug and browse through results from the
+VM test harness. Use to examine the output yaml produced by vmth.
+
+It is an extension to irb, so all irb commands work. The loaded
+yaml is stored in global variable $y. To get started use:
+
+load_obj 'filename' 
+
+.. that will load the yaml output into virb.. Then use these
+commands to examine the outout..
+
+p_apply 'scenario' # Shows output of apply step
+
+p_test 'scenario' # Shows output of test step
+
+f_apply 'scenario','filename' # Write out a scenario's output to a file
+
+=end
+
+#--
+# Copyright 2011 Greg Retkowski
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#++
+
+exec "irb -r virb.rb --simple-prompt"

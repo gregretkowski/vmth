@@ -1,0 +1,7 @@
+== Config file format
+
+Here's the format of the test config file. it is a yaml file and specified
+by the '-c' parameter to vmth. It is included with the gem named 'sample_config.yaml'
+
+  :include: sample_config.yaml
+

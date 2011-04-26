@@ -1,0 +1,232 @@
+#!/usr/bin/ruby
+
+=begin rdoc
+This is the command line tool to invoke the puppet test harness.
+
+  Usage: vmth [options]
+    -s, --service service_name       Test this service
+    -q, --vmm-cmd-line               Just output the vm monitor command line and exit
+    -t, --console                    Prep a vm and allocate it to a user
+    -c, --config-yaml file.yaml      The file used to configure the vmth
+    -d, --debug                      Run in debugging mode
+    -n, --no-vmm                     Run w/o VM management (for dev/debug)
+    -i /path/to/image.cow            Specify the vm disk image file
+        --image-file
+    -y, --yaml                       Output Yaml instead of formatted text
+    -e /path/to/scenarios            Specify the scenarios list file
+        --scenarios-file
+    -o, --output-file output.yaml    Output results to a yaml file
+    -p /path/to/your/source/dir      Path to your source directory
+        --path
+    -h, -?                           Show this message
+
+One example command-line may look like:
+
+    sudo vmth -e testable_services.txt -i /data/greg-test.cow -p /home/greg/puppet -c testpup26.yaml -d -o testpup26.output.yaml
+
+See sample_config.yaml for what the config file specified by '-c' should contain.
+
+The output of the test harness looks something like...
+
+  VM Test Harness Results....
+  Elapsed time to complete testing: 06:08:14
+  ------------------+------------+------------+----------------+
+   Scenario         | Apply      | Test       | Execution Time |
+  ------------------+------------+------------+----------------+
+   0nulltest        |     Passed |     Passed |       00:22:37 |
+   dbserver         |     Passed |     Passed |       00:09:29 |
+   loadbalancer     |     Passed |     Passed |       00:04:04 |
+   webserver        |     Passed |     Passed |       00:04:03 |
+   ...
+
+=end
+
+#--
+# Copyright 2011 Greg Retkowski
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#++
+
+require 'rubygems'
+require 'vmth'
+require 'optparse'
+require 'formatr'
+progname = File.basename($0)
+
+# PARSE COMMAND LINE OPTIONS
+
+options = {
+  :action => "all",
+  :qemu => true,
+  :path => ".",
+  :output => 'text',
+  :debug => false
+}
+op = OptionParser.new do |opts|
+  opts.banner = "Usage: #{progname} [options]"
+  opts.on("-s", "--service service_name", "Test this service") do |s|
+    options[:action] = 'service'
+    options[:services] ||= Array.new()
+    options[:services] << s
+  end
+  opts.on("-q", "--vmm-cmd-line", "Just output the vm monitor command line and exit") do
+    options[:action] = "vmm-command-line"
+  end
+  opts.on("-t", "--console", "Prep a vm and allocate it to a user") do
+    options[:action] = "console"
+  end
+  
+  opts.on("-c", "--config-yaml file.yaml", "The file used to configure the vmth") do |f|
+    options[:config_file] = f
+  end
+  opts.on("-d", "--debug", "Run in debugging mode") do
+    options[:debug] = true
+  end
+  opts.on("-n", "--no-vmm","Run w/o VM management (for dev/debug)") do
+    options[:vmm_enabled] = false
+  end
+  opts.on("-i", "--image-file /path/to/image.cow","Specify the vm disk image file") do |i|
+    options[:image_file] = i
+  end
+  opts.on("-y", "--yaml","Output Yaml instead of formatted text") do
+    options[:out_format] = 'yaml'
+  end
+  opts.on("-e", "--scenarios-file /path/to/scenarios","Specify the scenarios list file") do |e|
+    options[:scenarios_file] = e
+  end
+  opts.on("-o", "--output-file output.yaml","Output results to a yaml file") do |o|
+    options[:out_file] = o
+  end
+  opts.on("-p", "--path /path/to/your/source/dir","Path to your source directory") do |p|
+    options[:source_path] = p
+  end
+  opts.on_tail("-h", "-?", "Show this message") do
+    puts "Runs the VM Test Harness"
+    puts
+    puts opts
+    exit
+  end
+end.order!
+
+# FORMATTING FOR PRETTY OUTPUT
+
+include FormatR
+@top_ex = <<DOT
+VM Test Harness Results....
+Elapsed time to complete testing: @<<<<<<<<<<<<<<<<<<<<<
+s[:total_elapsed]
++------------------+------------+------------+----------------+
+| Scenario         |      Apply |       Test | Execution Time |
++------------------+------------+------------+----------------+
+DOT
+@ex = <<TO
+| @<<<<<<<<<<<<<<<<|@>>>>>>>>>> |@>>>>>>>>>> |@>>>>>>>>>>>>>> |
+s[:name], s[:apply], s[:test], s[:elapsed]
+TO
+@footer_ex = <<DOD
++------------------+------------+------------+----------------+
+DOD
+@body_fmt = Format.new(@top_ex,@ex,@footer_ex)
+@body_fmt.setPageLength(1000)
+
+def pretty_secs(s) #:nodoc:
+  begin
+    h,s=s.divmod(3600)
+    m,s=s.divmod(60)
+    return "%02i:%02i:%02i"%[h,m,s.to_i]
+  rescue
+    return "Unknown"
+  end
+end 
+
+def print_pretty(results) #:nodoc:
+  results['tests'].keys.sort.each do |k|
+    v = results['tests'][k]
+    s = {
+      :name =>  k,
+      :apply => (v['apply']['passed'] ? "Passed" : "FAILED" ),
+      :test => (v['test']['passed'] ? "Passed" : "FAILED" ),
+      :elapsed => (pretty_secs(v['elapsed_time'])),
+      :total_elapsed => (pretty_secs(results['elapsed_time']))
+    }
+    @body_fmt.printFormat(binding)
+  end
+end
+
+# EXECUTE TESTS AND PRINT RESULTS
+
+def err_catcher() #:nodoc:
+  begin
+    yield
+  rescue PTY::ChildExited, Errno::EIO => e
+    @qemu_r.flush rescue nil
+    $stderr.puts "Bad things happened to vmm!"
+    $stderr.puts "#{e.class}: #{e.message}"
+    $stderr.puts "Last output:"
+    $stderr.puts @qemu_r
+    raise e.class, e.message
+  end
+end
+
+@test = Vmth.new(options)
+ 
+
+unless options[:image_file]
+  $stderr.puts "Image file is mandatory"
+  exit 1
+end
+unless options[:config_file]
+  $stderr.puts "Config file is mandatory"
+  exit 1
+end
+
+if options[:action] == "vmm-command-line"
+  puts @test.vmcl
+  exit
+elsif options[:action] == 'console'
+  @test.console
+  exit
+elsif options[:action] == 'service'
+  err_catcher { results = @test.test_services(options[:services]) }
+elsif options[:action] == 'all'
+  err_catcher { results = @test.test }
+end
+results = @test.results
+
+if options[:out_file]
+  File.open(options[:out_file],"w") do |f|
+    f.puts YAML.dump(results)
+  end
+end
+if options[:output] == 'yaml'
+  puts YAML.dump(results)
+elsif options[:output] == 'text'
+  print_pretty(results)
+end
+
+# Handle the exit code.. Exit with the number of 'fails'
+# we have.. That'll indicate to a continuous integration
+# system that it 'failed' if exits != 0.
+def get_exit_code(results) #:nodoc:
+  pass_array = results['tests'].collect do |k,v|
+    v['test']['passed'] and v['apply']['passed']
+  end
+  if pass_array.size == 0
+    return 255
+  end
+  return pass_array.select{|g| g == false}.size
+end
+# remove state file.
+@test.cleanup
+exit get_exit_code(results)
+

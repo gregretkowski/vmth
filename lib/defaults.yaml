@@ -1,0 +1,28 @@
+# This is the defaults file for the vmth. You can use this to set system-wide
+# defaults for testing, for stuff that changes frequently you should specify
+# a config.yaml on the command line.
+vmm:
+  cmdline: qemu-kvm -usb -usbdevice tablet -m 1024 -smp 1 -hda <%=@image_file%> -vnc :<%=@vm_vnc_port%> -net nic,macaddr=<%=@vm_mac_addr%> -net user -redir tcp:<%=@vm_ssh_port%>::22 -no-reboot -monitor stdio
+  loadinit: loadvm init-test
+  saveteststate: savevm test-freeze
+  loadteststate: loadvm test-freeze
+  quitvmm: quit
+  ssh_port_start: 2224
+  ssh_port_end: 2233
+  vnc_port_start: 5903
+  vnc_port_end: 5912
+  mca_start: "00:50:56:36:b3:"
+  timeout: 30
+  prompt: "(qemu)"
+ssh:
+  host: localhost
+  user: root
+  auth_methods: password
+  password: ""
+  paranoid: false
+init_scenario: 0nulltest
+prep:
+applying:
+testing:
+teardown:
+

@@ -1,0 +1,44 @@
+This is a not-so-quickstart introduction to getting vmth up and running in your environment.
+
+== Setting up system images
+
+Get a copy of one of your system images
+
+One way to do this would be to boot from a rescue CD, then 'dd if=/dev/sda of=/some/other/filesystem/my-system.img'. presumably you'd want your system to have a fairly small harddrive to do this!
+
+If your system image is shrunk down (as we do) you can add space to the end of it via: 'dd if=/dev/zero bs=10240 count=5000000 >>your.img'
+
+Next convert the system image to a qemu compatable cow (copy-on-write) file.
+
+qemu-img convert -f raw linux-img-6.img -O qcow2 linux-img-6-large.cow
+
+== Setting up your 'host' system..
+Make sure you have qemu & kvm installed - and the kernel module loaded. Performance was unacceptably slow when running with the CPU emulated instead of directly accessed via kvm.
+
+== Editing your disk image.
+
+use 'vmth -q -i /your/image/file.cow
+
+This will spit out the qemu command line to launch your image.
+Run that - log into your system and configure it to be ready for vmth to interact with it. Some changes you may want to make are: removing the root password, ensuring sshd will allow root to login w/o a password.. change /etc/hosts if you have to hard-code some of the hosts your system will talk to, etc...
+
+Once you are done enter 'savevm init-test' and quit qemu.
+
+This saves the current state of the VM - so that when the vmth runs the test it doesn't have to boot the vm - it starts from that precise moment.
+
+== Creating the yaml specification for your tests
+
+Next you'll want to edit the test config yaml for your test. You can use the 'sample_config.yaml' as a starting point. The 'prep' steps are completed once before testing starts - the 'applying' applies changes to your system in preparation for a test. The 'testing' runs your unit test script. and the teardown is done after applying and testing has completed. Most commands are passed through ERB, so you can put expansions here.
+
+Put a list of scenarios you want to test into a file, like testable_scenarios.txt. Each scenario should be a single word on its own line.
+
+== Running the test
+sudo bin/vmth -e testable_scenarios.txt -i /data/vms/system-test.cow -p /path/to/my/automation/code -c my_config.yaml -d -o my_config.output.yaml
+
+After your run completes, the vmth will print a report of what passed or failed via the 'applying' and the 'testing' steps. You can use 'virb' to look at your output yaml and understand where tests may have failed.
+
+== Debugging
+
+use 'vmth --console' for debugging; it'll launch the vm, apply all the prep steps, and then leave you at a qemu prompt.. From here you can ssh into the machine and interact with it at will.. and you can always reset via 'loadvm init-test' or 'loadvm test-freeze' to get you back to the start.
+
+

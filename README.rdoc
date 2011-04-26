@@ -1,0 +1,34 @@
+=== Introduction
+
+:include: DESCRIPTION
+
+It can be integrated with your continuous integration environment and triggered each time a commit is made to your automation code.
+
+
+=== What it does
+
+It will go through a series of scenarios (a scenario is usualy a service name).  It will run the 'prep' steps, freeze the vm, then run one scenario at a time, and unfreeze after
+each scenario.
+
+== Getting started
+
+See QUICKSTART[link:files/QUICKSTART_rdoc.html] to get started.
+
+== Command-line tools
+
+* vmth[link:files/bin/vmth.html]: vm test harness command-line tool
+* virb[link:files/bin/virb.html]: Interactive vm test debugger...
+
+== Gochas
+
+Took a while to track down a bug where our VM instance was running out of memory and then crashing. It just appeared that qemu just plain exited without error. traced it to the guest having vm.panic_on_oom to 1 - which causes the kernel to panic and exit if we run out of memory.
+
+Here is the Vmth[link:classes/Vmth.html] class documentation.
+
+== Config file format
+
+See sample_config.yaml[link:files/CONFIG_rdoc.html] for the vmth config file format.
+
+== Support
+
+For now, mail greg@rage.net and I'll do my best to help.

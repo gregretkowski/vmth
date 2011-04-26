@@ -1,0 +1,54 @@
+# 
+# Strings are passed through ERB, so you can use this to templatize your config
+# Variables you might use via ERB are...
+#   @source_path - specified on the command-line via '-p'
+#   @scenario - name of the scenario currently under test
+#   
+# Each section below provides an array of directives.
+# Directives are processed in order. Valid directives are:
+#   upload: [ host-path, vm-path ] - copy a file to the vm
+#   upload_recurse: [ host-path, vm-path ] - recursively copy files to vm
+#   download: [ vm-path, host-path ] - copy a file down from the vm
+#   download_recurse: [ vm-path, host-path ] - same, but recursive
+#   cmd: some-shell-command - execute a command on the vm
+#   cmdtest: [ "some-shell-command", !ruby/regexp /output-when-cmd-fails/ ]
+#     This command will be run and its output will be evaluated for a string
+#     which shows the command failed. If this string is found or the
+#     command exits non-zero the section is considered 'FAILED' and reported
+#     as such in the text output
+#   foreach: [ args [array-of-args], directive1, directive2, .. ] 
+#     This is used to loop over a series of commands.
+
+# You can also override settings from defaults.yaml in this file.
+
+prep:
+  - cmd: sysctl vm.panic_on_oom=0
+  - cmd: mkdir -p /home/ops-envs/development
+  - foreach:
+    - args: [ dnsdata, rubylib, scripts, service ]
+    - cmd: svn export --force https://svn/trunk/<%=@arg%> /home/ops-envs/development/<%=@arg%>
+  - upload_recurse: [ "<%=@source_path%>/.", /home/ops-envs/development/puppet ]
+  - foreach:
+    - args: [ ldap.conf, nsswitch.conf ]
+    - upload: [ "<%=@source_path%>/dist/ldap-client/<%=@arg%>", "/etc/<%=@arg%>" ]
+  - upload: [ "<%=@source_path%>/dist/puppetmaster/fileserver.rb", /usr/lib/ruby/site_ruby/1.8/puppet/network/handler/fileserver.rb ]
+  - cmd: cp /home/ops-envs/development/puppet/dist/puppet/puppet.conf /etc/puppet/puppet.conf
+  - cmd: cp /home/ops-envs/development/puppet/dist/puppetmaster/fileserver.conf /etc/puppet
+  - cmd: rm /etc/puppet/puppetd.conf
+  - cmd: rm /etc/puppet/puppetmasterd.conf
+  - cmd: mkdir -p /var/cache/rsync
+  - cmd: /sbin/service puppetmaster restart
+  - upload: [ "<%=@source_path%>/../get_device_services.rb", /etc/puppet/get_device_services.rb ]
+  - upload: [ "<%=@source_path%>/../machdb_hostdata.yaml", /etc/machdb_hostdata.yaml ]
+  - cmd: chattr +i /etc/hosts
+  - cmd: chattr +i /etc/ssh/sshd_config
+  - cmd: sleep 5
+applying:
+  - cmd: cp /etc/shadow /etc/shadow.bak
+  - cmd: /sbin/service puppetmaster restart
+  - cmd: "echo <%=@scenario%> >/etc/test_this_service"
+  - cmdtest: [ "pp", !ruby/regexp /Not using cache on failed catalog/ ]
+testing:
+  - cmdtest: [ "ruby /home/ops-envs/development/puppet/tests/test_<%=@scenario%>.rb 2>&1", !ruby/regexp /Failure:/ ]
+teardown:
+  - cmd: cp /etc/shadow.bak /etc/shadow
