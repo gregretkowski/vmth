@@ -1,6 +1,6 @@
 === Introduction
 
-:include: DESCRIPTION
+The VMTH (Virtual Machine Test Harness) provides a mechanism to unit-test your infrastructure automation - puppet policies, chef recipes, release deployment scripts, etc. It uses features of modern VM monitors (like qemu) to snapshot system state, and then reset that state after each test, so that a series of tests can be performed on a VM instance in rapid succession.
 
 It can be integrated with your continuous integration environment and triggered each time a commit is made to your automation code.
 
