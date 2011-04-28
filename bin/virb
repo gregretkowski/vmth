@@ -38,4 +38,4 @@ f_apply 'scenario','filename' # Write out a scenario's output to a file
 # limitations under the License.
 #++
 
-exec "irb -r virb.rb --simple-prompt"
+exec "irb -r rubygems -r virb --simple-prompt"
